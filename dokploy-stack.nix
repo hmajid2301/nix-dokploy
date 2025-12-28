@@ -23,6 +23,8 @@
         placement.constraints = ["node.role == manager"];
         restart_policy.condition = "any";
       };
+    } // lib.optionalAttrs (cfg.database.port != null) {
+      ports = [ "${toString cfg.database.port}:5432" ];
     };
 
     redis = {

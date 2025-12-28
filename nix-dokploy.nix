@@ -37,6 +37,17 @@ in {
           The default value matches what Dokploy expects internally.
         '';
       };
+
+      port = lib.mkOption {
+        type = lib.types.nullOr lib.types.port;
+        default = null;
+        example = 5432;
+        description = ''
+          External port to expose PostgreSQL on the host.
+          By default (null), PostgreSQL is only accessible within the Docker network.
+          Set to a port number (e.g., 5432) to expose it on the host.
+        '';
+      };
     };
 
     image = lib.mkOption {
@@ -79,6 +90,35 @@ in {
           Default matches the version pinned in Dokploy's installation script.
           Changing this may cause compatibility issues with Dokploy.
         '';
+      };
+
+      ports = {
+        http = lib.mkOption {
+          type = lib.types.nullOr lib.types.port;
+          default = 80;
+          description = ''
+            HTTP port for Traefik.
+            Set to null to disable HTTP port binding.
+          '';
+        };
+
+        https = lib.mkOption {
+          type = lib.types.nullOr lib.types.port;
+          default = 443;
+          description = ''
+            HTTPS port for Traefik (TCP).
+            Set to null to disable HTTPS TCP port binding.
+          '';
+        };
+
+        httpsUdp = lib.mkOption {
+          type = lib.types.nullOr lib.types.port;
+          default = 443;
+          description = ''
+            HTTPS port for Traefik (UDP, for HTTP/3).
+            Set to null to disable HTTPS UDP port binding.
+          '';
+        };
       };
     };
 
@@ -308,9 +348,18 @@ in {
                   -v /var/run/docker.sock:/var/run/docker.sock \
                   -v ${cfg.dataDir}/traefik/traefik.yml:/etc/traefik/traefik.yml \
                   -v ${cfg.dataDir}/traefik/dynamic:/etc/dokploy/traefik/dynamic \
-                  -p 80:80/tcp \
-                  -p 443:443/tcp \
-                  -p 443:443/udp \
+                  ${
+                lib.optionalString (cfg.traefik.ports.http != null)
+                "-p ${toString cfg.traefik.ports.http}:80/tcp \\"
+              }
+                  ${
+                lib.optionalString (cfg.traefik.ports.https != null)
+                "-p ${toString cfg.traefik.ports.https}:443/tcp \\"
+              }
+                  ${
+                lib.optionalString (cfg.traefik.ports.httpsUdp != null)
+                "-p ${toString cfg.traefik.ports.httpsUdp}:443/udp \\"
+              }
                   ${cfg.traefik.image}
               fi
             '';
