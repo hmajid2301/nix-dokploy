@@ -3,7 +3,7 @@
 {
   version = "3.8";
 
-  services = {
+  services = lib.optionalAttrs (!cfg.database.useHostPostgres) {
     postgres = {
       image = "postgres:16";
       environment = {
@@ -26,6 +26,7 @@
     } // lib.optionalAttrs (cfg.database.port != null) {
       ports = [ "${toString cfg.database.port}:5432" ];
     };
+  } // {
 
     redis = {
       image = "redis:7";
@@ -47,6 +48,8 @@
       image = cfg.image;
       environment = {
         ADVERTISE_ADDR = "\${ADVERTISE_ADDR}";
+      } // lib.optionalAttrs cfg.database.useHostPostgres {
+        DATABASE_URL = "postgresql:///dokploy?host=/run/postgresql&user=dokploy&password=\${POSTGRES_PASSWORD}";
       };
       networks = {
         dokploy-network = {
@@ -57,8 +60,10 @@
         "/var/run/docker.sock:/var/run/docker.sock"
         "${cfg.dataDir}:/etc/dokploy"
         "dokploy-docker-config:/root/.docker"
+      ] ++ lib.optionals cfg.database.useHostPostgres [
+        "/run/postgresql:/run/postgresql"
       ];
-      depends_on = ["postgres" "redis"];
+      depends_on = if cfg.database.useHostPostgres then ["redis"] else ["postgres" "redis"];
       deploy = {
         replicas = 1;
         placement.constraints = ["node.role == manager"];
@@ -81,8 +86,9 @@
     };
   };
 
-  volumes = {
+  volumes = lib.optionalAttrs (!cfg.database.useHostPostgres) {
     dokploy-postgres-database = {};
+  } // {
     redis-data-volume = {};
     dokploy-docker-config = {};
   };

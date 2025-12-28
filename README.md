@@ -64,7 +64,13 @@ That's it! Dokploy will be available at `http://your-server-ip:3000`
 | `services.dokploy.dataDir` | `/var/lib/dokploy` | Data directory for Dokploy |
 | `services.dokploy.image` | `dokploy/dokploy:v0.25.11` | Dokploy Docker image |
 | `services.dokploy.port` | `"3000:3000"` | Port binding for web UI (⚠️ see note) |
+| `services.dokploy.database.useHostPostgres` | `false` | Use host PostgreSQL instead of container |
+| `services.dokploy.database.port` | `null` | External port for containerized PostgreSQL |
+| `services.dokploy.traefik.enable` | `true` | Enable Dokploy-managed Traefik container |
 | `services.dokploy.traefik.image` | `traefik:v3.6.1` | Traefik Docker image |
+| `services.dokploy.traefik.ports.http` | `80` | HTTP port for Traefik |
+| `services.dokploy.traefik.ports.https` | `443` | HTTPS port for Traefik (TCP) |
+| `services.dokploy.traefik.ports.httpsUdp` | `443` | HTTPS port for Traefik (UDP/HTTP3) |
 | `services.dokploy.swarm.autoRecreate` | `false` | Auto-recreate swarm when IP change is detected during service restart |
 
 ### Swarm Advertise Address
@@ -120,6 +126,101 @@ services.dokploy.port = "3000:3000";
 # Disable direct port access (access through Traefik only)
 services.dokploy.port = null;
 ```
+
+### Using Host PostgreSQL
+
+Instead of the containerized PostgreSQL, you can use NixOS's PostgreSQL service via Unix sockets:
+
+```nix
+services.dokploy = {
+  enable = true;
+  database.useHostPostgres = true;
+};
+
+# Configure PostgreSQL with required database and user
+services.postgresql = {
+  enable = true;
+  ensureDatabases = [ "dokploy" ];
+  ensureUsers = [{
+    name = "dokploy";
+    ensureDBOwnership = true;
+  }];
+  # Set authentication - use md5 for password auth
+  authentication = ''
+    local dokploy dokploy md5
+  '';
+};
+
+# Set the password for the dokploy user (required by Dokploy)
+# Note: The password must be set to Dokploy's hardcoded value
+# You can do this with: sudo -u postgres psql -c "ALTER USER dokploy PASSWORD 'amukds4wi9001583845717ad2';"
+```
+
+**Benefits of using host PostgreSQL:**
+- No containerized database
+- Use NixOS's declarative PostgreSQL configuration
+- Connect via Unix sockets (no network overhead)
+- Easier backups with NixOS services
+- Integrate with existing PostgreSQL monitoring
+
+**Note:** Dokploy hardcodes the database password in its source code. You must set the password to `amukds4wi9001583845717ad2` for the `dokploy` user.
+
+### Using Host Traefik
+
+Disable the bundled Traefik container and use your own instance:
+
+```nix
+services.dokploy = {
+  enable = true;
+  traefik.enable = false;  # Disable bundled Traefik
+};
+
+# Example: Use NixOS Traefik service
+services.traefik = {
+  enable = true;
+  staticConfigOptions = {
+    providers.docker = {
+      endpoint = "unix:///var/run/docker.sock";
+      network = "dokploy-network";
+      exposedByDefault = false;
+    };
+    entryPoints = {
+      web.address = ":80";
+      websecure.address = ":443";
+    };
+  };
+};
+
+# Ensure Traefik can connect to the dokploy-network
+# You may need to manually attach Traefik to the network:
+# docker network connect dokploy-network <traefik-container-name>
+```
+
+**Benefits of using host Traefik:**
+- Use existing Traefik configuration
+- Centralized reverse proxy management
+- Share Traefik across multiple services
+- Use NixOS declarative config instead of Dokploy's files
+
+### Configurable Traefik/PostgreSQL Ports
+
+You can customize the ports for the bundled services:
+
+```nix
+services.dokploy = {
+  # Traefik ports
+  traefik.ports = {
+    http = 8080;        # Use port 8080 for HTTP
+    https = 8443;       # Use port 8443 for HTTPS
+    httpsUdp = null;    # Disable HTTP/3 (UDP)
+  };
+
+  # PostgreSQL port (expose to host)
+  database.port = 5432;  # Expose PostgreSQL on port 5432
+};
+```
+
+Set ports to `null` to disable port binding.
 
 ## 📄 License
 

@@ -24,6 +24,36 @@ in {
     };
 
     database = {
+      useHostPostgres = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Use the host's PostgreSQL service instead of a containerized instance.
+
+          When enabled:
+          - The PostgreSQL container will not be created
+          - Dokploy will connect via Unix socket at /run/postgresql
+          - You must configure services.postgresql with the required database and user:
+
+            services.postgresql = {
+              enable = true;
+              ensureDatabases = [ "dokploy" ];
+              ensureUsers = [{
+                name = "dokploy";
+                ensureDBOwnership = true;
+              }];
+              # Set authentication for the dokploy user
+              authentication = '''
+                local dokploy dokploy md5
+              ''';
+              # Enable TCP if you need remote access
+              enableTCPIP = lib.mkDefault false;
+            };
+
+          Note: The password must still be set to the hardcoded value that Dokploy expects.
+        '';
+      };
+
       password = lib.mkOption {
         type = lib.types.str;
         default = "amukds4wi9001583845717ad2";
@@ -46,6 +76,8 @@ in {
           External port to expose PostgreSQL on the host.
           By default (null), PostgreSQL is only accessible within the Docker network.
           Set to a port number (e.g., 5432) to expose it on the host.
+
+          This option is ignored when useHostPostgres is true.
         '';
       };
     };
@@ -82,6 +114,31 @@ in {
     };
 
     traefik = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Enable the Dokploy-managed Traefik container.
+
+          Set to false if you want to use your own Traefik instance (either on the host
+          or as a separate container). When disabled:
+          - The dokploy-traefik container will not be created
+          - You must configure your own Traefik to connect to the dokploy-network
+          - Configure your Traefik to route to Dokploy services
+
+          Example with host Traefik using NixOS services.traefik:
+            services.traefik = {
+              enable = true;
+              staticConfigOptions = {
+                providers.docker = {
+                  endpoint = "unix:///var/run/docker.sock";
+                  network = "dokploy-network";
+                };
+              };
+            };
+        '';
+      };
+
       image = lib.mkOption {
         type = lib.types.str;
         default = "traefik:v3.6.1";
@@ -89,6 +146,8 @@ in {
           Traefik Docker image to use.
           Default matches the version pinned in Dokploy's installation script.
           Changing this may cause compatibility issues with Dokploy.
+
+          This option is ignored when traefik.enable is false.
         '';
       };
 
@@ -99,6 +158,8 @@ in {
           description = ''
             HTTP port for Traefik.
             Set to null to disable HTTP port binding.
+
+            This option is ignored when traefik.enable is false.
           '';
         };
 
@@ -108,6 +169,8 @@ in {
           description = ''
             HTTPS port for Traefik (TCP).
             Set to null to disable HTTPS TCP port binding.
+
+            This option is ignored when traefik.enable is false.
           '';
         };
 
@@ -117,6 +180,8 @@ in {
           description = ''
             HTTPS port for Traefik (UDP, for HTTP/3).
             Set to null to disable HTTPS UDP port binding.
+
+            This option is ignored when traefik.enable is false.
           '';
         };
       };
@@ -322,7 +387,7 @@ in {
       wantedBy = ["multi-user.target"];
     };
 
-    systemd.services.dokploy-traefik = {
+    systemd.services.dokploy-traefik = lib.mkIf cfg.traefik.enable {
       description = "Dokploy Traefik container";
       after = ["docker.service" "dokploy-stack.service"];
       requires = ["docker.service" "dokploy-stack.service"];
