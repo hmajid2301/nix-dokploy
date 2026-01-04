@@ -61,13 +61,15 @@ That's it! Dokploy will be available at `http://your-server-ip:3000`
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `services.dokploy.dataDir` | `/var/lib/dokploy` | Data directory for Dokploy |
+| `services.dokploy.dataDir` | `/etc/dokploy` | Data directory for Dokploy |
 | `services.dokploy.image` | `dokploy/dokploy:v0.25.11` | Dokploy Docker image |
 | `services.dokploy.port` | `"3000:3000"` | Port binding for web UI (⚠️ see note) |
+| `services.dokploy.lxc` | `false` | Enable LXC compatibility (required for Proxmox) |
 | `services.dokploy.database.useHostPostgres` | `false` | Use host PostgreSQL instead of container |
 | `services.dokploy.database.port` | `null` | External port for containerized PostgreSQL |
 | `services.dokploy.traefik.enable` | `true` | Enable Dokploy-managed Traefik container |
 | `services.dokploy.traefik.image` | `traefik:v3.6.1` | Traefik Docker image |
+| `services.dokploy.traefik.extraArgs` | `[]` | Extra arguments for Traefik container |
 | `services.dokploy.traefik.ports.http` | `80` | HTTP port for Traefik |
 | `services.dokploy.traefik.ports.https` | `443` | HTTPS port for Traefik (TCP) |
 | `services.dokploy.traefik.ports.httpsUdp` | `443` | HTTPS port for Traefik (UDP/HTTP3) |
@@ -221,6 +223,19 @@ services.dokploy = {
 ```
 
 Set ports to `null` to disable port binding.
+
+### Traefik Configuration
+
+You can pass extra arguments to the Traefik container using `traefik.extraArgs`. This is useful for passing environment variables or mounting additional volumes.
+
+```nix
+services.dokploy.traefik.extraArgs = [
+  "--log.level=DEBUG"
+  "-e CF_API_EMAIL=user@example.com"
+  "-e CF_API_KEY=your_api_key"
+  "-v /path/to/certs:/certs"
+];
+```
 
 ## 📄 License
 
